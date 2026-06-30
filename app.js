@@ -468,46 +468,207 @@ function exportRaw() {
   downloadBlob(`gemini_raw_${new Date().toISOString().replace(/[:.]/g,"-")}.txt`, lastGeminiText || "応答なし", "text/plain;charset=utf-8");
 }
 
+function xmlEscape(s) {
+  return String(s || "").replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function wordTextRuns(text) {
+  const lines = String(text || "").split(/\r?\n/);
+  return lines.map((line, i) => {
+    const br = i === 0 ? "" : "<w:br/>";
+    return `${br}<w:r><w:t xml:space="preserve">${xmlEscape(line)}</w:t></w:r>`;
+  }).join("");
+}
+
+function wordParagraph(text, opts = {}) {
+  const style = opts.heading ? `<w:pPr><w:pStyle w:val="${opts.heading}"/></w:pPr>` : "";
+  return `<w:p>${style}${wordTextRuns(text)}</w:p>`;
+}
+
+function wordCell(text) {
+  return `<w:tc><w:tcPr><w:tcW w:w="2400" w:type="dxa"/></w:tcPr>${wordParagraph(text)}</w:tc>`;
+}
+
+function wordRow(cells) {
+  return `<w:tr>${cells.map(wordCell).join("")}</w:tr>`;
+}
+
+function crc32(bytes) {
+  if (!crc32.table) {
+    crc32.table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) {
+      let c = n;
+      for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      crc32.table[n] = c >>> 0;
+    }
+  }
+  let c = 0xffffffff;
+  for (let i = 0; i < bytes.length; i++) c = crc32.table[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function dosTimeDate(date = new Date()) {
+  const time = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+  const dosYear = Math.max(1980, date.getFullYear()) - 1980;
+  const d = (dosYear << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+  return {time, date: d};
+}
+
+function makeZipBlob(files) {
+  const enc = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  const dt = dosTimeDate();
+
+  for (const file of files) {
+    const nameBytes = enc.encode(file.name);
+    const dataBytes = typeof file.data === "string" ? enc.encode(file.data) : file.data;
+    const crc = crc32(dataBytes);
+    const local = new Uint8Array(30 + nameBytes.length);
+    const lv = new DataView(local.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true); // version needed
+    lv.setUint16(6, 0, true);  // flags
+    lv.setUint16(8, 0, true);  // no compression
+    lv.setUint16(10, dt.time, true);
+    lv.setUint16(12, dt.date, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, dataBytes.length, true);
+    lv.setUint32(22, dataBytes.length, true);
+    lv.setUint16(26, nameBytes.length, true);
+    lv.setUint16(28, 0, true);
+    local.set(nameBytes, 30);
+    localParts.push(local, dataBytes);
+
+    const central = new Uint8Array(46 + nameBytes.length);
+    const cv = new DataView(central.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true); // version made by
+    cv.setUint16(6, 20, true); // version needed
+    cv.setUint16(8, 0, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, dt.time, true);
+    cv.setUint16(14, dt.date, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, dataBytes.length, true);
+    cv.setUint32(24, dataBytes.length, true);
+    cv.setUint16(28, nameBytes.length, true);
+    cv.setUint16(30, 0, true);
+    cv.setUint16(32, 0, true);
+    cv.setUint16(34, 0, true);
+    cv.setUint16(36, 0, true);
+    cv.setUint32(38, 0, true);
+    cv.setUint32(42, offset, true);
+    central.set(nameBytes, 46);
+    centralParts.push(central);
+    offset += local.length + dataBytes.length;
+  }
+
+  const centralSize = centralParts.reduce((sum, p) => sum + p.length, 0);
+  const end = new Uint8Array(22);
+  const ev = new DataView(end.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true);
+  ev.setUint16(6, 0, true);
+  ev.setUint16(8, files.length, true);
+  ev.setUint16(10, files.length, true);
+  ev.setUint32(12, centralSize, true);
+  ev.setUint32(16, offset, true);
+  ev.setUint16(20, 0, true);
+
+  return new Blob([...localParts, ...centralParts, end], {type:"application/vnd.openxmlformats-officedocument.wordprocessingml.document"});
+}
+
+function buildDocxBlob() {
+  const p = getProjectPayload();
+  const nowIso = new Date().toISOString();
+
+  const metaRows = [
+    ["案件名", p.projectName],
+    ["住戸番号", p.unitNo],
+    ["打合せ日", p.meetingDate],
+    ["打合せ相手", p.clientName],
+    ["出席者", p.attendees],
+    ["備考", p.note]
+  ].map(wordRow).join("");
+
+  const header = wordRow(["No.", "部屋", "対象", "内容", "区分", "状態", "信頼度", "備考"]);
+  const rows = items.map((item, idx) => wordRow([
+    String(idx + 1), item.room, item.target, item.content, item.category, item.status, item.confidence, item.reason
+  ])).join("") || wordRow(["", "", "", "項目なし", "", "", "", ""]);
+
+  const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    ${wordParagraph("図面メモ議事録", {heading:"Title"})}
+    ${wordParagraph("案件情報", {heading:"Heading1"})}
+    <w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/><w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders></w:tblPr>${metaRows}</w:tbl>
+    ${wordParagraph("確認・変更事項", {heading:"Heading1"})}
+    <w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/><w:tblW w:w="0" w:type="auto"/><w:tblBorders><w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/><w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders></w:tblPr>${header}${rows}</w:tbl>
+    <w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1134" w:right="850" w:bottom="1134" w:left="850" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr>
+  </w:body>
+</w:document>`;
+
+  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:qFormat/><w:rPr><w:rFonts w:ascii="Yu Gothic" w:eastAsia="Yu Gothic" w:hAnsi="Yu Gothic"/><w:sz w:val="22"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:qFormat/><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style>
+  <w:style w:type="table" w:styleId="TableGrid"><w:name w:val="Table Grid"/><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4"/><w:left w:val="single" w:sz="4"/><w:bottom w:val="single" w:sz="4"/><w:right w:val="single" w:sz="4"/><w:insideH w:val="single" w:sz="4"/><w:insideV w:val="single" w:sz="4"/></w:tblBorders></w:tblPr></w:style>
+</w:styles>`;
+
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`;
+
+  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`;
+
+  const core = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>${xmlEscape((p.projectName || "図面メモ議事録") + " 議事録")}</dc:title>
+  <dc:creator>図面メモ議事録</dc:creator>
+  <cp:lastModifiedBy>図面メモ議事録</cp:lastModifiedBy>
+  <dcterms:created xsi:type="dcterms:W3CDTF">${nowIso}</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">${nowIso}</dcterms:modified>
+</cp:coreProperties>`;
+
+  const appXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>図面メモ議事録</Application></Properties>`;
+
+  return makeZipBlob([
+    {name:"[Content_Types].xml", data:contentTypes},
+    {name:"_rels/.rels", data:rels},
+    {name:"docProps/core.xml", data:core},
+    {name:"docProps/app.xml", data:appXml},
+    {name:"word/document.xml", data:documentXml},
+    {name:"word/styles.xml", data:stylesXml}
+  ]);
+}
+
 function exportWordDoc() {
   const p = getProjectPayload();
-  const rows = items.map((item, idx) => `
-    <tr>
-      <td>${idx+1}</td>
-      <td>${escapeHtml(item.room)}</td>
-      <td>${escapeHtml(item.target)}</td>
-      <td>${escapeHtml(item.content).replace(/\n/g,"<br>")}</td>
-      <td>${escapeHtml(item.category)}</td>
-      <td>${escapeHtml(item.status)}</td>
-      <td>${escapeHtml(item.confidence)}</td>
-      <td>${escapeHtml(item.reason).replace(/\n/g,"<br>")}</td>
-    </tr>`).join("");
-
-  const html = `<!doctype html>
-<html><head><meta charset="utf-8"><title>図面メモ議事録</title>
-<style>
-body{font-family:"Yu Gothic","Meiryo",sans-serif;font-size:11pt;line-height:1.55;}
-h1{font-size:18pt;border-bottom:2px solid #333;padding-bottom:6px;}
-table{border-collapse:collapse;width:100%;margin-top:12px;}
-td,th{border:1px solid #999;padding:6px;vertical-align:top;}
-th{background:#eee;}
-.meta td:first-child{width:120px;background:#f3f3f3;font-weight:bold;}
-</style></head><body>
-<h1>図面メモ議事録</h1>
-<table class="meta">
-<tr><td>案件名</td><td>${escapeHtml(p.projectName)}</td></tr>
-<tr><td>住戸番号</td><td>${escapeHtml(p.unitNo)}</td></tr>
-<tr><td>打合せ日</td><td>${escapeHtml(p.meetingDate)}</td></tr>
-<tr><td>打合せ相手</td><td>${escapeHtml(p.clientName)}</td></tr>
-<tr><td>出席者</td><td>${escapeHtml(p.attendees)}</td></tr>
-<tr><td>備考</td><td>${escapeHtml(p.note).replace(/\n/g,"<br>")}</td></tr>
-</table>
-<h2>確認・変更事項</h2>
-<table><thead><tr><th>No.</th><th>部屋</th><th>対象</th><th>内容</th><th>区分</th><th>状態</th><th>信頼度</th><th>備考</th></tr></thead>
-<tbody>${rows || `<tr><td colspan="8">項目なし</td></tr>`}</tbody></table>
-</body></html>`;
-
-  downloadBlob(`${safeName(p.projectName)}_${safeName(p.unitNo)}_図面メモ議事録.doc`, html, "application/msword;charset=utf-8");
-  log("Wordで開ける .doc ファイルを書き出しました。");
+  const blob = buildDocxBlob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${safeName(p.projectName)}_${safeName(p.unitNo)}_図面メモ議事録.docx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  log("正式な .docx ファイルを書き出しました。iPadのファイルからWordで開いてください。");
 }
 
 async function startCamera() {
@@ -672,7 +833,7 @@ async function init() {
   }
   renderImages();
   renderItems();
-  log("v03 起動しました。モデルは gemini-2.5-flash 推奨です。");
+  log("v04 起動しました。Word出力は正式な .docx です。");
 }
 
 init().catch(err => {

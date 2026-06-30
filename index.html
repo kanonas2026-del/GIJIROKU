@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1f2937" />
+  <title>図面メモ議事録 AI設定サンプル</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">GitHub Pages / iPad Safari 用サンプル</p>
+        <h1>図面メモ議事録</h1>
+      </div>
+      <span class="status-pill" id="secureModeLabel">APIキー未読込</span>
+    </header>
+
+    <main class="main-grid">
+      <section class="card hero-card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">AI設定</p>
+            <h2>Gemini APIキー</h2>
+          </div>
+        </div>
+
+        <div class="notice">
+          <strong>本物のAPIキーはGitHubに置かないでください。</strong><br />
+          iPad内の <code>gemini_api_key.txt</code> を選択して読み込みます。1行に1キー、最大3本以上でも読み込めます。
+        </div>
+
+        <div class="form-block">
+          <label class="field-label" for="apiKeyFile">APIキーファイル</label>
+          <div class="file-row">
+            <input id="apiKeyFile" type="file" accept=".txt,text/plain" />
+            <button type="button" id="forgetKeysBtn" class="secondary-btn">キーを破棄</button>
+          </div>
+          <p class="hint">例：<code>gemini_api_key.txt</code> にAPIキーを1行ずつ入力。</p>
+        </div>
+
+        <div class="option-grid">
+          <label class="check-card">
+            <input type="checkbox" id="saveToDevice" />
+            <span>
+              <strong>このiPadに保存する</strong>
+              <small>次回起動時に再利用。共有iPadでは非推奨。</small>
+            </span>
+          </label>
+
+          <label class="check-card">
+            <input type="checkbox" id="discardAfterRead" checked />
+            <span>
+              <strong>読み取り後にキーを破棄する</strong>
+              <small>Gemini読取後、メモリ上のキーを消します。</small>
+            </span>
+          </label>
+        </div>
+
+        <div class="summary-box">
+          <div>
+            <span>読み込み済みキー</span>
+            <strong id="loadedCount">0件</strong>
+          </div>
+          <div>
+            <span>使用モード</span>
+            <strong id="rotationMode">ローテーション</strong>
+          </div>
+          <div>
+            <span>次に使うキー</span>
+            <strong id="nextKeyLabel">なし</strong>
+          </div>
+        </div>
+
+        <div id="keyList" class="key-list empty">APIキーはまだ読み込まれていません。</div>
+      </section>
+
+      <section class="card">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">接続確認</p>
+            <h2>Gemini接続テスト</h2>
+          </div>
+        </div>
+
+        <div class="form-block">
+          <label class="field-label" for="modelName">モデル名</label>
+          <input id="modelName" class="text-input" value="gemini-2.5-flash" autocomplete="off" />
+          <p class="hint">モデル名はAI Studio側の利用可能モデルに合わせて変更できます。</p>
+        </div>
+
+        <div class="form-block">
+          <label class="field-label" for="testPrompt">テストプロンプト</label>
+          <textarea id="testPrompt" rows="5">接続テストです。「OK」とだけ返してください。</textarea>
+        </div>
+
+        <div class="button-row">
+          <button type="button" id="testGeminiBtn" class="primary-btn">接続テスト</button>
+          <button type="button" id="copyLogBtn" class="secondary-btn">ログをコピー</button>
+        </div>
+
+        <pre id="logBox" class="log-box">準備完了。</pre>
+      </section>
+
+      <section class="card full-span">
+        <div class="card-heading">
+          <div>
+            <p class="eyebrow">次工程用</p>
+            <h2>図面メモ読取に流用する関数</h2>
+          </div>
+        </div>
+        <p class="body-text">
+          このサンプルでは、<code>callGeminiWithRotation()</code> に画像データとプロンプトを渡せる構成にしています。
+          429・quota系エラーが出た場合は次のキーへ切り替えて再試行します。
+        </p>
+        <div class="code-panel">
+<pre><code>const result = await callGeminiWithRotation({
+  prompt: finalPrompt,
+  imageBase64: drawingImageBase64,
+  mimeType: "image/jpeg",
+  model: "gemini-2.5-flash"
+});</code></pre>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

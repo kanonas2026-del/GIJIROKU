@@ -11,7 +11,7 @@
   <header class="app-header">
     <div>
       <h1>図面メモ議事録</h1>
-      <p>iPad Safari + GitHub Pages + Gemini API / v04</p>
+      <p>iPad Safari + GitHub Pages + Gemini API / v05</p>
     </div>
     <div class="header-actions">
       <button id="saveProjectBtn" class="secondary">案件保存</button>
@@ -30,18 +30,19 @@
       <section class="panel">
         <h2>AI設定</h2>
         <label class="file-button">
-          gemini_api_key.txt を読み込む
+          gemini_api_key.txt を読み込む / 差し替える
           <input id="keyFileInput" type="file" accept=".txt,text/plain" />
         </label>
         <div class="check-row">
-          <input id="saveKeysCheck" type="checkbox" />
-          <label for="saveKeysCheck">このiPadに保存する</label>
+          <input id="saveKeysCheck" type="checkbox" checked />
+          <label for="saveKeysCheck">このiPadに保存する（次回から自動読込）</label>
         </div>
         <div class="check-row">
-          <input id="discardKeysCheck" type="checkbox" checked />
-          <label for="discardKeysCheck">読み取り後にキーを破棄する</label>
+          <input id="discardKeysCheck" type="checkbox" />
+          <label for="discardKeysCheck">読み取り後に一時キーを破棄する</label>
         </div>
         <p id="keyStatus" class="status">読み込み済みキー：0件</p>
+        <p id="keySavedStatus" class="status">保存状態：未保存</p>
         <button id="testGeminiBtn" class="secondary full">接続テスト</button>
         <button id="clearKeysBtn" class="danger-outline full">保存キー削除</button>
       </section>
@@ -177,6 +178,6 @@
     </article>
   </template>
 
-  <script src="./app.js?v=04"></script>
+  <script src="./app.js?v=05"></script>
 </body>
 </html>

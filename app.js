@@ -45,8 +45,29 @@ function log(message) {
   box.scrollTop = box.scrollHeight;
 }
 
+function keyMaskSummary() {
+  if (!apiKeys.length) return "";
+  return apiKeys.map((k, i) => {
+    const head = k.slice(0, 6);
+    const tail = k.slice(-4);
+    return `${i + 1}:${head}…${tail}`;
+  }).join(" / ");
+}
+
+function saveKeysToThisDevice() {
+  if (!apiKeys.length) return;
+  localStorage.setItem("gijiroku_gemini_keys", JSON.stringify(apiKeys));
+  localStorage.setItem("gijiroku_gemini_keys_saved_at", new Date().toISOString());
+}
+
 function updateKeyStatus() {
+  const saved = !!localStorage.getItem("gijiroku_gemini_keys");
+  const savedAt = localStorage.getItem("gijiroku_gemini_keys_saved_at");
   $("keyStatus").textContent = `読み込み済みキー：${apiKeys.length}件 / 使用モード：ローテーション`;
+  const savedText = saved
+    ? `保存状態：このiPadに保存済み${savedAt ? "（" + new Date(savedAt).toLocaleString("ja-JP") + "）" : ""}`
+    : "保存状態：未保存";
+  if ($("keySavedStatus")) $("keySavedStatus").textContent = savedText;
 }
 
 function parseKeys(text) {
@@ -753,18 +774,41 @@ function initEvents() {
     const text = await file.text();
     apiKeys = parseKeys(text);
     keyIndex = 0;
-    updateKeyStatus();
-    if ($("saveKeysCheck").checked) {
-      localStorage.setItem("gijiroku_gemini_keys", JSON.stringify(apiKeys));
-      log("APIキーをこのiPadに保存しました。");
+    if (!apiKeys.length) {
+      updateKeyStatus();
+      alert("APIキーが読み込めませんでした。txtは1行1キーで入れてください。");
+      return;
     }
-    log(`APIキーを${apiKeys.length}件読み込みました。`);
+    if ($("saveKeysCheck").checked) {
+      saveKeysToThisDevice();
+      $("discardKeysCheck").checked = false;
+      log("APIキーをこのiPadに保存しました。次回起動時は自動で読み込みます。");
+    } else {
+      log("APIキーを一時読込しました。このiPadには保存していません。");
+    }
+    updateKeyStatus();
+    log(`APIキーを${apiKeys.length}件読み込みました。${keyMaskSummary()}`);
   });
 
   $("saveKeysCheck").addEventListener("change", () => {
-    if ($("saveKeysCheck").checked && apiKeys.length) {
-      localStorage.setItem("gijiroku_gemini_keys", JSON.stringify(apiKeys));
-      log("現在のAPIキーをこのiPadに保存しました。");
+    if ($("saveKeysCheck").checked) {
+      $("discardKeysCheck").checked = false;
+      if (apiKeys.length) {
+        saveKeysToThisDevice();
+        log("現在のAPIキーをこのiPadに保存しました。次回から再読込不要です。");
+      } else {
+        log("保存モードをONにしました。gemini_api_key.txtを1回読み込むと、このiPadに保存されます。");
+      }
+    } else {
+      log("保存モードをOFFにしました。保存済みキーを消す場合は『保存キー削除』を押してください。");
+    }
+    updateKeyStatus();
+  });
+
+  $("discardKeysCheck").addEventListener("change", () => {
+    if ($("discardKeysCheck").checked && $("saveKeysCheck").checked) {
+      $("saveKeysCheck").checked = false;
+      log("破棄モードをONにしたため、このiPadに保存する設定をOFFにしました。");
     }
   });
 
@@ -773,7 +817,7 @@ function initEvents() {
     apiKeys = [];
     keyIndex = 0;
     updateKeyStatus();
-    log("保存済みAPIキーを削除しました。");
+    log("このiPadに保存されたAPIキーを削除しました。次回は再度 gemini_api_key.txt を読み込んでください。");
   });
 
   $("testGeminiBtn").addEventListener("click", async () => {
@@ -825,15 +869,25 @@ async function init() {
   if (savedKeys) {
     try {
       apiKeys = JSON.parse(savedKeys);
+      keyIndex = 0;
+      $("saveKeysCheck").checked = true;
+      $("discardKeysCheck").checked = false;
       updateKeyStatus();
-      log("このiPadに保存されたAPIキーを読み込みました。");
-    } catch {}
+      log(`このiPadに保存されたAPIキーを自動で読み込みました。${keyMaskSummary()}`);
+    } catch {
+      localStorage.removeItem("gijiroku_gemini_keys");
+      localStorage.removeItem("gijiroku_gemini_keys_saved_at");
+      updateKeyStatus();
+      log("保存済みAPIキーの読み込みに失敗したため、保存データを削除しました。");
+    }
   } else {
+    $("saveKeysCheck").checked = true;
+    $("discardKeysCheck").checked = false;
     updateKeyStatus();
   }
   renderImages();
   renderItems();
-  log("v04 起動しました。Word出力は正式な .docx です。");
+  log("v05 起動しました。APIキーは一度保存すれば次回から自動読込します。Word出力は正式な .docx です。");
 }
 
 init().catch(err => {

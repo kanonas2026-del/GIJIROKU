@@ -1,9 +1,9 @@
 {
-  "name": "図面メモ議事録 AI設定サンプル",
-  "short_name": "図面議事録",
+  "name": "図面メモ議事録",
+  "short_name": "議事録",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#f4f6f8",
-  "theme_color": "#1f2937",
-  "lang": "ja"
+  "background_color": "#f6f7fb",
+  "theme_color": "#2563eb",
+  "icons": []
 }

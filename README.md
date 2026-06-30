@@ -1,41 +1,62 @@
-# 図面メモ議事録 GitHub Pages APIキー管理サンプル
+# 図面メモ議事録 GitHub Pages版 v02
 
-iPad Safari + GitHub Pages 前提のサンプルです。
+iPad Safari + GitHub Pages + Gemini API の試作版です。
 
-## 目的
+## 重要
 
-- GitHubにはアプリ本体だけ置く
-- 本物のGemini APIキーはGitHubに置かない
-- iPad内の `gemini_api_key.txt` を読み込む
-- 3本以上のAPIキーをローテーションする
-- 429 / quota 系エラー時は次のキーへ切り替える
-- 運用が固まるまでは「毎回APIキー選択」を基本にする
-- 必要になったら「このiPadに保存する」を使えるようにする
+GitHubに本物のAPIキーを絶対にアップしないでください。
 
-## ファイル構成
+- GitHub：アプリ本体だけ
+- Dropbox：プロンプト、テンプレート、案件バックアップ
+- iPad内：本物の `gemini_api_key.txt`
+
+## 今回の機能
+
+- `gemini_api_key.txt` 読み込み
+- 複数APIキーのローテーション
+- 429 / quota 系エラー時のキー切替
+- 「このiPadに保存する」
+- 「読み取り後にキーを破棄する」
+- プロンプトtxt読み込み
+- 図面画像アップロード
+- iPadカメラ撮影
+- カメラプレビュー撮影
+- Gemini画像読み取り
+- AI読み取り結果の修正画面
+- 案件をiPad内ブラウザDBへ保存
+- JSON書き出し
+- Wordで開ける `.doc` 書き出し
+
+## GitHubへアップするファイル
+
+リポジトリ直下に以下をアップロードしてください。
 
 ```text
-zumen_minutes_github_pages_key_sample/
-├ index.html
-├ style.css
-├ app.js
-├ manifest.json
-├ README.md
-└ sample/
-   ├ gemini_api_key.sample.txt
-   └ prompt_sample.txt
+index.html
+style.css
+app.js
+manifest.json
+README.md
+prompt_sample.txt
+gemini_api_key.sample.txt
 ```
+
+既存ファイルがある場合は上書きでOKです。
 
 ## iPadでの使い方
 
 1. GitHub PagesのURLをSafariで開く
-2. 共有ボタンから「ホーム画面に追加」
-3. ホーム画面のアイコンから起動
-4. 「APIキーファイル」で、iPad内の `gemini_api_key.txt` を選択
-5. `読み込み済みキー：3件` になればOK
-6. 「接続テスト」を押す
+2. 共有ボタン → ホーム画面に追加
+3. `gemini_api_key.txt` をiPad内から読み込む
+4. `prompt_sample.txt` または物件別プロンプトを読み込む
+5. 図面画像を追加、またはカメラで撮影
+6. Geminiで読み取り
+7. 修正画面で確認
+8. Word出力
 
-## gemini_api_key.txt の形式
+## APIキー形式
+
+`gemini_api_key.txt` は1行1キーです。
 
 ```text
 API_KEY_1
@@ -43,19 +64,10 @@ API_KEY_2
 API_KEY_3
 ```
 
-空行と `#` から始まる行は無視します。
+## 注意
 
-## 重要な注意
+この試作版のWord出力は、Wordで開ける `.doc` 形式です。
+正式な `.docx` テンプレート差し込みは次段階で実装予定です。
 
-本物のAPIキーをGitHubにコミットしないでください。
-
-このサンプルはブラウザからGemini APIを直接呼びます。GitHubにはキーを保存しませんが、ブラウザで直接APIを使う以上、完全秘匿ではありません。業務用途では、少なくともGemini APIのみにキー制限をかけてください。
-
-## 次に組み込む予定
-
-- Dropboxからプロンプトファイルを読み込み
-- 画像アップロード / カメラ撮影
-- Geminiで図面メモ読み取り
-- 修正画面
-- docx出力
-- 案件データ保存
+PDF画像の直接読み込みは未対応です。
+PDF図面は、iPadでスクリーンショットまたは画像化して読み込んでください。

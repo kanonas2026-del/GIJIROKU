@@ -11,7 +11,7 @@
   <header class="app-header">
     <div>
       <h1>図面メモ議事録</h1>
-      <p>iPad Safari + GitHub Pages + Gemini API</p>
+      <p>iPad Safari + GitHub Pages + Gemini API / v03</p>
     </div>
     <div class="header-actions">
       <button id="saveProjectBtn" class="secondary">案件保存</button>
@@ -101,7 +101,7 @@
         </div>
         <div class="form-grid small">
           <label>Geminiモデル
-            <input id="modelName" value="gemini-1.5-flash-latest" />
+            <input id="modelName" value="gemini-2.5-flash" />
           </label>
           <label>読取モード
             <select id="readMode">
@@ -116,6 +116,7 @@
           <button id="readGeminiBtn" class="primary">Geminiで読み取り</button>
           <button id="insertSampleBtn" class="secondary">試験データ</button>
           <button id="exportJsonBtn" class="secondary">JSON書き出し</button>
+          <button id="downloadRawBtn" class="secondary">Gemini応答保存</button>
         </div>
         <pre id="logBox" class="log"></pre>
       </section>
@@ -176,6 +177,6 @@
     </article>
   </template>
 
-  <script src="./app.js"></script>
+  <script src="./app.js?v=03"></script>
 </body>
 </html>
